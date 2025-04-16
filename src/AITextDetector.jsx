@@ -1,6 +1,11 @@
 // React Component for OpenAI AI Detection
 import React, { useState, useEffect } from 'react';
-import { validateOpenAIKey, analyzeTextWithOpenAI, analyzeBatchWithOpenAI } from './openai-detector';
+import { analyzeTextWithOpenAI, analyzeBatchWithOpenAI } from './openai-detector';
+import { 
+  validateOpenAIKey as validateEnhancedOpenAIKey, 
+  analyzeTextWithEnhancedOpenAI, 
+  analyzeBatchWithEnhancedOpenAI 
+} from './enhanced-detector';
 
 const AITextDetector = () => {
   const [inputText, setInputText] = useState('');
@@ -12,6 +17,8 @@ const AITextDetector = () => {
   const [apiKeyValid, setApiKeyValid] = useState(false);
   const [apiKeyValidating, setApiKeyValidating] = useState(false);
   const [error, setError] = useState('');
+  const [useEnhancedAnalysis, setUseEnhancedAnalysis] = useState(true);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
 
   // Validate OpenAI API Key
   const validateApiKey = async () => {
@@ -21,7 +28,7 @@ const AITextDetector = () => {
     setError('');
     
     try {
-      const isValid = await validateOpenAIKey(apiKey.trim());
+      const isValid = await validateEnhancedOpenAIKey(apiKey.trim());
       setApiKeyValid(isValid);
       
       if (!isValid) {
@@ -54,19 +61,39 @@ const AITextDetector = () => {
     
     setIsAnalyzing(true);
     setError('');
+    setAnalysisProgress(0);
     
     try {
       if (!apiKeyValid) {
         throw new Error("Please enter a valid OpenAI API key");
       }
       
-      const analysis = await analyzeTextWithOpenAI(inputText, apiKey);
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setAnalysisProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 500);
+      
+      // Use enhanced or standard analysis based on user preference
+      const analysis = useEnhancedAnalysis 
+        ? await analyzeTextWithEnhancedOpenAI(inputText, apiKey)
+        : await analyzeTextWithOpenAI(inputText, apiKey);
+      
+      clearInterval(progressInterval);
+      setAnalysisProgress(100);
+      
       setResults(analysis);
     } catch (err) {
       setError(`Analysis error: ${err.message}`);
       console.error("Analysis error:", err);
     } finally {
       setIsAnalyzing(false);
+      setAnalysisProgress(0);
     }
   };
   
@@ -76,6 +103,7 @@ const AITextDetector = () => {
     
     setIsAnalyzing(true);
     setError('');
+    setAnalysisProgress(0);
     
     try {
       if (!apiKeyValid) {
@@ -85,14 +113,59 @@ const AITextDetector = () => {
       // Split by line breaks, filtering out empty lines
       const lines = inputText.split('\n').filter(line => line.trim().length > 0);
       
-      const results = await analyzeBatchWithOpenAI(lines, apiKey);
+      // Use enhanced or standard analysis based on user preference
+      const results = useEnhancedAnalysis
+        ? await analyzeBatchWithEnhancedOpenAI(lines, apiKey)
+        : await analyzeBatchWithOpenAI(lines, apiKey);
+      
       setBatchResults(results);
+      setAnalysisProgress(100);
     } catch (err) {
       setError(`Batch analysis error: ${err.message}`);
       console.error("Batch analysis error:", err);
     } finally {
       setIsAnalyzing(false);
+      setAnalysisProgress(0);
     }
+  };
+  
+  // Render a progress bar
+  const renderProgressBar = () => {
+    if (!isAnalyzing || analysisProgress === 0) return null;
+    
+    return (
+      <div className="mt-4">
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div 
+            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+            style={{ width: `${analysisProgress}%` }}
+          ></div>
+        </div>
+        <p className="text-sm text-gray-600 mt-1 text-center">
+          {analysisProgress < 100 ? 'Analyzing...' : 'Analysis complete'}
+        </p>
+      </div>
+    );
+  };
+  
+  // Render a metric bar
+  const renderMetricBar = (label, value, maxValue = 100, colorClass = 'bg-blue-500') => {
+    const percentage = Math.min(100, (value / maxValue) * 100);
+    
+    return (
+      <div className="mb-4">
+        <div className="flex justify-between mb-1">
+          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <span className="text-sm font-medium text-gray-700">{value}</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div 
+            className={`${colorClass} h-2.5 rounded-full transition-all duration-300`}
+            style={{ width: `${percentage}%` }}
+          ></div>
+        </div>
+      </div>
+    );
   };
   
   return (
@@ -173,6 +246,34 @@ const AITextDetector = () => {
                   </button>
                 </div>
               </div>
+              
+              <div className="flex-1">
+                <label className="block text-gray-700 text-sm font-bold mb-3">
+                  Analysis Type:
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ${
+                      useEnhancedAnalysis 
+                        ? 'bg-blue-600 text-white shadow-md' 
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                    onClick={() => setUseEnhancedAnalysis(true)}
+                  >
+                    Enhanced
+                  </button>
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ${
+                      !useEnhancedAnalysis 
+                        ? 'bg-blue-600 text-white shadow-md' 
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                    onClick={() => setUseEnhancedAnalysis(false)}
+                  >
+                    Standard
+                  </button>
+                </div>
+              </div>
             </div>
             
             <div className="mb-8">
@@ -196,6 +297,8 @@ const AITextDetector = () => {
           >
             {isAnalyzing ? 'Analyzing...' : batchMode ? 'Analyze All Responses' : 'Analyze Text'}
           </button>
+          
+          {renderProgressBar()}
           
           {!batchMode && results && (
             <div className="mt-8 p-8 bg-gray-50 rounded-xl shadow-md">
@@ -236,6 +339,11 @@ const AITextDetector = () => {
                 <div className="bg-white p-6 rounded-xl shadow-sm">
                   <p className="text-sm text-gray-700 mb-4">
                     Analysis performed using <span className="font-semibold">{results.apiDetails.model}</span>
+                    {results.sourceModel === 'enhanced-openai' && (
+                      <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                        Enhanced Analysis
+                      </span>
+                    )}
                   </p>
                   
                   {results.apiDetails.reasoning && (
@@ -253,6 +361,13 @@ const AITextDetector = () => {
                       ))}
                     </ul>
                   </div>
+                  
+                  {results.validationScore && (
+                    <div className="mt-6 p-4 bg-purple-50 rounded-lg">
+                      <h4 className="text-sm font-bold text-gray-700 mb-2">Validation Score:</h4>
+                      {renderMetricBar('Overall Reliability', results.validationScore, 100, 'bg-purple-500')}
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -279,6 +394,18 @@ const AITextDetector = () => {
                     <p className="text-sm text-gray-500">Personal Pronouns</p>
                     <p className="text-2xl font-bold text-gray-800">{results.textStats.personalPronouns}</p>
                   </div>
+                  {results.textStats.lexicalDiversity !== undefined && (
+                    <div className="bg-white p-4 rounded-xl shadow-sm">
+                      <p className="text-sm text-gray-500">Lexical Diversity</p>
+                      <p className="text-2xl font-bold text-gray-800">{(results.textStats.lexicalDiversity * 100).toFixed(1)}%</p>
+                    </div>
+                  )}
+                  {results.textStats.readabilityScore !== undefined && (
+                    <div className="bg-white p-4 rounded-xl shadow-sm">
+                      <p className="text-sm text-gray-500">Readability Score</p>
+                      <p className="text-2xl font-bold text-gray-800">{results.textStats.readabilityScore}</p>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -368,6 +495,12 @@ const AITextDetector = () => {
                   • OpenAI API provides high-accuracy detection for short responses<br />
                   • The analysis examines patterns that may not be obvious to human readers<br />
                   • Each response is analyzed individually using GPT-4's understanding of AI text patterns
+                  {useEnhancedAnalysis && (
+                    <>
+                      <br />• Enhanced analysis uses a hybrid approach combining embeddings and completions
+                      <br />• Validation scores provide additional confidence in the results
+                    </>
+                  )}
                 </p>
               </div>
             </div>
